@@ -7,23 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Mirror of SQL Server USERINFO table
+enum Role {
+  ADMIN
+  HR
+  WORKER
+}
+
 model User {
-  id              String         @id @map("user_id")
+  id              String         @id @default(cuid())
+  email           String         @unique
+  password        String
   name            String?
-  gender          String?
-  title           String?
+  role            Role           @default(WORKER)
   hiredDate       DateTime?
   department      String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   attendances     Attendance[]
   qrAttendances   QRAttendance[]
+  sessions        Session[]
 
   @@map("users")
 }
 
-// Mirror of SQL Server CHECKINOUT table for biometric records
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
+
 model Attendance {
   id          Int       @id @default(autoincrement())
   userId      String
@@ -32,12 +49,14 @@ model Attendance {
   verifyCode  Int       // Original verification code from biometric
   createdAt   DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id])
+  sourceId    String?   // ID from the SQL Server database
+  synced      Boolean   @default(false)
 
   @@index([userId, checkTime])
+  @@index([sourceId])
   @@map("attendances")
 }
 
-// New table for QR-based attendance
 model QRAttendance {
   id          Int       @id @default(autoincrement())
   userId      String
@@ -53,7 +72,6 @@ model QRAttendance {
   @@map("qr_attendances")
 }
 
-// Sync status tracking
 model SyncLog {
   id          Int       @id @default(autoincrement())
   tableName   String    // Name of the table being synced
@@ -67,7 +85,6 @@ model SyncLog {
   @@map("sync_logs")
 }
 
-// Report configurations
 model ReportConfig {
   id          Int       @id @default(autoincrement())
   name        String    @unique
@@ -76,19 +93,20 @@ model ReportConfig {
   recipients  String[]  // Email addresses for automated delivery
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  reports     Report[]
 
   @@map("report_configs")
 }
 
-// Generated reports
 model Report {
-  id          Int       @id @default(autoincrement())
+  id          Int          @id @default(autoincrement())
   configId    Int
   startDate   DateTime
   endDate     DateTime
-  format      String    // "PDF", "CSV", etc.
-  fileUrl     String    // URL to download the report
-  createdAt   DateTime  @default(now())
+  format      String       // "PDF", "CSV", etc.
+  fileUrl     String       // URL to download the report
+  createdAt   DateTime     @default(now())
+  config      ReportConfig @relation(fields: [configId], references: [id])
 
   @@map("reports")
 }
