@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Mirror of SQL Server USERINFO table
+model User {
+  id              String         @id @map("user_id")
+  name            String?
+  gender          String?
+  title           String?
+  hiredDate       DateTime?
+  department      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  attendances     Attendance[]
+  qrAttendances   QRAttendance[]
+
+  @@map("users")
+}
+
+// Mirror of SQL Server CHECKINOUT table for biometric records
+model Attendance {
+  id          Int       @id @default(autoincrement())
+  userId      String
+  checkTime   DateTime
+  checkType   String    // "I" for check-in, "O" for check-out
+  verifyCode  Int       // Original verification code from biometric
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, checkTime])
+  @@map("attendances")
+}
+
+// New table for QR-based attendance
+model QRAttendance {
+  id          Int       @id @default(autoincrement())
+  userId      String
+  checkTime   DateTime
+  checkType   String    // "I" for check-in, "O" for check-out
+  location    Json?     // Geolocation data
+  ipAddress   String?
+  deviceInfo  String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, checkTime])
+  @@map("qr_attendances")
+}
+
+// Sync status tracking
+model SyncLog {
+  id          Int       @id @default(autoincrement())
+  tableName   String    // Name of the table being synced
+  lastSyncId  Int?      // Last ID synced from SQL Server
+  lastSyncTime DateTime // Last successful sync time
+  status      String    // "success" or "error"
+  error       String?   // Error message if sync failed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("sync_logs")
+}
+
+// Report configurations
+model ReportConfig {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  query       String    // SQL query template for the report
+  schedule    String?   // Cron expression for automated generation
+  recipients  String[]  // Email addresses for automated delivery
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("report_configs")
+}
+
+// Generated reports
+model Report {
+  id          Int       @id @default(autoincrement())
+  configId    Int
+  startDate   DateTime
+  endDate     DateTime
+  format      String    // "PDF", "CSV", etc.
+  fileUrl     String    // URL to download the report
+  createdAt   DateTime  @default(now())
+
+  @@map("reports")
+}
